@@ -15,11 +15,6 @@ namespace VisionzFramework.Runtime.WeChat
         private TCPSocketConnectOption m_TCPSocketConnectOption;
 
         /// <summary>
-        /// 读数据缓冲区。
-        /// </summary>
-        private byte[] m_ReceiveBuffer;
-
-        /// <summary>
         /// 外部连接成功回调。
         /// </summary>
         public event Action ConnectCallback;
@@ -44,9 +39,6 @@ namespace VisionzFramework.Runtime.WeChat
 
         public TcpClientSocket(int bufferLength, System.Action connectCallback, Action<int> sendCallback, Action<byte[], int, int> receiveCallBack)
         {
-            bufferLength = bufferLength > ITcpClientSocket.Size_64k ? bufferLength : ITcpClientSocket.Size_64k;
-            m_ReceiveBuffer = new byte[bufferLength];
-
             ConnectCallback = connectCallback;
             SendCallback = sendCallback;
             ReceiveCallback = receiveCallBack;
@@ -182,7 +174,7 @@ namespace VisionzFramework.Runtime.WeChat
             //外部处理数据
             if (ReceiveCallback != null)
             {
-                ReceiveCallback(m_ReceiveBuffer, 0, bytesReceived);
+                ReceiveCallback(result.message, 0, bytesReceived);
             }
         }
 
