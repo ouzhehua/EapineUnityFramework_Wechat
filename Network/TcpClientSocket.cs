@@ -47,6 +47,8 @@ namespace VisionzFramework.Runtime.WeChat
             m_Socket.OnConnect(ConnectAsyncCallback);
             m_Socket.OnMessage(ReceiveAsyncCallback);
             //m_Socket.OnError()
+
+            m_TCPSocketConnectOption = new TCPSocketConnectOption();
         }
 
         /// <summary>
