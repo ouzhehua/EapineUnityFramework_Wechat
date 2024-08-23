@@ -48,6 +48,7 @@ namespace VisionzFramework.Runtime.WeChat
             }
 
             m_Socket = WX.CreateUDPSocket();
+            m_UdpSocketSendOption = new UDPSocketSendOption(); //不new也能正常使用，不过还是先new了，以后感兴趣再研究为什么不需要new
         }
 
         /// <summary>
