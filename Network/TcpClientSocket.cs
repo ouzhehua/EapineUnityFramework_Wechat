@@ -1,6 +1,8 @@
 ﻿#if UNITY_WEBGL || UNITY_EDITOR
 using System;
 using System.Net;
+using System.Net.Sockets;
+using UnityEngine;
 using VisionzFramework.Core.Network;
 using WeChatWASM;
 
@@ -30,23 +32,27 @@ namespace VisionzFramework.Runtime.WeChat
         /// </summary>
         public event Action<byte[], int, int> ReceiveCallback;
 
+        /// <summary>
+        /// 发生错误回调事件。
+        /// </summary>
+        public event Action<ITcpClientSocket, SocketError, string> ErrorCallback;
 
-        private Action<string> m_ErrorEvent;
 
         public TcpClientSocket() : this(ITcpClientSocket.Size_512k) { }
 
-        public TcpClientSocket(int bufferLength) : this(bufferLength, null, null, null) { }
+        public TcpClientSocket(int bufferLength) : this(bufferLength, null, null, null, null) { }
 
-        public TcpClientSocket(int bufferLength, System.Action connectCallback, Action<int> sendCallback, Action<byte[], int, int> receiveCallBack)
+        public TcpClientSocket(int bufferLength, System.Action connectCallback, Action<int> sendCallback, Action<byte[], int, int> receiveCallBack, Action<ITcpClientSocket, SocketError, string> errorCallback)
         {
             ConnectCallback = connectCallback;
             SendCallback = sendCallback;
             ReceiveCallback = receiveCallBack;
+            ErrorCallback = errorCallback;
 
             m_Socket = WX.CreateTCPSocket();
-            m_Socket.OnConnect(ConnectAsyncCallback);
-            m_Socket.OnMessage(ReceiveAsyncCallback);
-            //m_Socket.OnError()
+            m_Socket.OnConnect(OnConnectCallback);
+            m_Socket.OnMessage(OnMessageCallback);
+            m_Socket.OnError(OnErrorCallback);
 
             m_TCPSocketConnectOption = new TCPSocketConnectOption();
         }
@@ -58,35 +64,18 @@ namespace VisionzFramework.Runtime.WeChat
         /// <param name="port">端口。</param>
         public void Connect(string host, int port)
         {
-            IPAddress ipAddress = null;
-
             try
             {
-                IPAddress[] addresses = Dns.GetHostEntry(host).AddressList;
-                foreach (var item in addresses)
-                {
-                    if (item.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-                    {
-                        ipAddress = item;
-                        break;
-                    }
-                }
+                m_TCPSocketConnectOption.address = host;
+                m_TCPSocketConnectOption.port = port;
+                m_TCPSocketConnectOption.timeout = 2;
+                Debug.Log($"Connect host:{m_TCPSocketConnectOption.address} port:{m_TCPSocketConnectOption.port}");
+                m_Socket.Connect(m_TCPSocketConnectOption);
             }
-            catch (Exception e)
+            catch (Exception exception)
             {
-                if (m_ErrorEvent != null)
-                {
-                    m_ErrorEvent(e.ToString());
-                }
-                return;
+                throw exception;
             }
-
-            if (ipAddress == null)
-            {
-                throw new Exception("can not parse host : " + host);
-            }
-
-            Connect(ipAddress, port);
         }
 
         /// <summary>
@@ -101,12 +90,12 @@ namespace VisionzFramework.Runtime.WeChat
                 m_TCPSocketConnectOption.address = ipAddress.ToString();
                 m_TCPSocketConnectOption.port = port;
                 m_TCPSocketConnectOption.timeout = 2;
-
+                Debug.Log($"Connect ip:{m_TCPSocketConnectOption.address} port:{m_TCPSocketConnectOption.port}");
                 m_Socket.Connect(m_TCPSocketConnectOption);
             }
-            catch (Exception e)
+            catch (Exception exception)
             {
-                throw;
+                throw exception;
             }
         }
 
@@ -114,9 +103,9 @@ namespace VisionzFramework.Runtime.WeChat
         /// 连接服务器回调函数。
         /// </summary>
         /// <param name="asyncResult"></param>
-        private void ConnectAsyncCallback(GeneralCallbackResult result)
+        private void OnConnectCallback(GeneralCallbackResult result)
         {
-            //result.errMsg
+            Debug.LogError("OnConnectCallback " + result.errMsg);
 
             //处理外部回调
             if (ConnectCallback != null)
@@ -147,9 +136,9 @@ namespace VisionzFramework.Runtime.WeChat
             }
             catch (Exception e)
             {
-                if (m_ErrorEvent != null)
+                if (ErrorCallback != null)
                 {
-                    m_ErrorEvent(e.ToString());
+                    ErrorCallback(this, SocketError.SocketError, e.ToString());
                 }
                 throw;
             }
@@ -159,7 +148,7 @@ namespace VisionzFramework.Runtime.WeChat
         /// 异步接收数据回调。
         /// </summary>
         /// <param name="asyncResult"></param>
-        private void ReceiveAsyncCallback(TCPSocketOnMessageListenerResult result)
+        private void OnMessageCallback(TCPSocketOnMessageListenerResult result)
         {
             int bytesReceived = 0;
             if (result.message != null)
@@ -177,6 +166,15 @@ namespace VisionzFramework.Runtime.WeChat
             if (ReceiveCallback != null)
             {
                 ReceiveCallback(result.message, 0, bytesReceived);
+            }
+        }
+
+        private void OnErrorCallback(GeneralCallbackResult result)
+        {
+            Debug.LogError("OnErrorCallback " + result);
+            if (ErrorCallback != null)
+            {
+                ErrorCallback(this, SocketError.SocketError, result.errMsg);
             }
         }
 
