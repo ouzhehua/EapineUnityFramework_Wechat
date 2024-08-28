@@ -37,6 +37,8 @@ namespace VisionzFramework.Runtime.WeChat
         /// </summary>
         public event Action<ITcpClientSocket, SocketError, string> ErrorCallback;
 
+        private float m_ConnectTimeout = 2f;
+
 
         public TcpClientSocket() : this(ITcpClientSocket.Size_512k) { }
 
@@ -68,7 +70,7 @@ namespace VisionzFramework.Runtime.WeChat
             {
                 m_TCPSocketConnectOption.address = host;
                 m_TCPSocketConnectOption.port = port;
-                m_TCPSocketConnectOption.timeout = 2;
+                m_TCPSocketConnectOption.timeout = m_ConnectTimeout;
                 Debug.Log($"Connect host:{m_TCPSocketConnectOption.address} port:{m_TCPSocketConnectOption.port}");
                 m_Socket.Connect(m_TCPSocketConnectOption);
             }
@@ -89,7 +91,7 @@ namespace VisionzFramework.Runtime.WeChat
             {
                 m_TCPSocketConnectOption.address = ipAddress.ToString();
                 m_TCPSocketConnectOption.port = port;
-                m_TCPSocketConnectOption.timeout = 2;
+                m_TCPSocketConnectOption.timeout = m_ConnectTimeout;
                 Debug.Log($"Connect ip:{m_TCPSocketConnectOption.address} port:{m_TCPSocketConnectOption.port}");
                 m_Socket.Connect(m_TCPSocketConnectOption);
             }
@@ -105,12 +107,24 @@ namespace VisionzFramework.Runtime.WeChat
         /// <param name="asyncResult"></param>
         private void OnConnectCallback(GeneralCallbackResult result)
         {
-            Debug.LogError("OnConnectCallback " + result.errMsg);
-
-            //处理外部回调
-            if (ConnectCallback != null)
+            if (string.IsNullOrEmpty(result.errMsg))
             {
-                ConnectCallback();
+                Debug.Log("OnConnectCallback");
+
+                //处理外部回调
+                if (ConnectCallback != null)
+                {
+                    ConnectCallback();
+                }
+            }
+            else
+            {
+                Debug.LogError("OnConnectCallback " + result.errMsg);
+
+                if (ErrorCallback != null)
+                {
+                    ErrorCallback(this, SocketError.ConnectionAborted, result.errMsg);
+                }
             }
         }
 
@@ -171,7 +185,6 @@ namespace VisionzFramework.Runtime.WeChat
 
         private void OnErrorCallback(GeneralCallbackResult result)
         {
-            Debug.LogError("OnErrorCallback " + result);
             if (ErrorCallback != null)
             {
                 ErrorCallback(this, SocketError.SocketError, result.errMsg);
