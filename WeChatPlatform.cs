@@ -35,7 +35,7 @@ namespace VisionzFramework.Runtime.WeChat
 
         protected void InitFont()
         {
-            WX.GetWXFont("URL", LoadFontFinish);
+            WX.GetWXFont("https://shanmaiwangluo1.oss-cn-shenzhen.aliyuncs.com/download/SIMLI.TTF", LoadFontFinish);
         }
 
         private void LoadFontFinish(Font font)
