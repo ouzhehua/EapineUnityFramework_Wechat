@@ -23,14 +23,13 @@ namespace VisionzFramework.Runtime.WeChat
 
         /// <summary>
         /// 外部发送数据回调。
-        /// <param name="sendLength">发送数据长度。</param>
         /// </summary>
-        public event Action<int> SendCallback;
+        public event TcpSendCallbackDelegate SendCallback;
 
         /// <summary>
         /// 外部收到数据回调。
         /// </summary>
-        public event Action<byte[], int, int> ReceiveCallback;
+        public event TcpReceiveCallbackDelegate ReceiveCallback;
 
         /// <summary>
         /// 发生错误回调事件。
@@ -44,7 +43,7 @@ namespace VisionzFramework.Runtime.WeChat
 
         public TcpClientSocket(int bufferLength) : this(bufferLength, null, null, null, null) { }
 
-        public TcpClientSocket(int bufferLength, System.Action connectCallback, Action<int> sendCallback, Action<byte[], int, int> receiveCallBack, Action<ITcpClientSocket, SocketError, string> errorCallback)
+        public TcpClientSocket(int bufferLength, System.Action connectCallback, TcpSendCallbackDelegate sendCallback, TcpReceiveCallbackDelegate receiveCallBack, Action<ITcpClientSocket, SocketError, string> errorCallback)
         {
             ConnectCallback = connectCallback;
             SendCallback = sendCallback;
