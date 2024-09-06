@@ -9,7 +9,7 @@ using AddressFamily = VisionzFramework.Core.Network.AddressFamily;
 
 namespace VisionzFramework.Runtime.WeChat
 {
-    public class UdpClientSocket : IUdpClientSocket
+    public class UdpClientSocket : IUdpClientSocket, IDisposable
     {
         /// <summary>
         /// Socket 实例。
@@ -45,7 +45,7 @@ namespace VisionzFramework.Runtime.WeChat
         private bool m_NeedRemoteInfo = false;
         private bool m_BindedPort = false;
         private bool m_HasOnMessage = false;
-
+        private bool m_Disposed = false;
         
         public UdpClientSocket() : this(AddressFamily.IPv4) { }
 
@@ -238,6 +238,34 @@ namespace VisionzFramework.Runtime.WeChat
             }
             m_Socket = null;
             m_BindedPort = false;
+        }
+        
+        /// <summary>
+        /// 释放资源。
+        /// </summary>
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+        
+        /// <summary>
+        /// 释放资源。
+        /// </summary>
+        /// <param name="disposing">释放资源标记。</param>
+        private void Dispose(bool disposing)
+        {
+            if (m_Disposed)
+            {
+                return;
+            }
+
+            if (disposing)
+            {
+                Close();
+            }
+
+            m_Disposed = true;
         }
     }
 }
