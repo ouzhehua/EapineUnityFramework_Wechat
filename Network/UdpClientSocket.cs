@@ -9,7 +9,7 @@ using AddressFamily = VisionzFramework.Core.Network.AddressFamily;
 
 namespace VisionzFramework.Runtime.WeChat
 {
-    public class UdpClientSocket : IUdpClientSocket, IDisposable
+    public class UdpClientSocket : UdpClientSocketBase
     {
         /// <summary>
         /// Socket 实例。
@@ -22,44 +22,21 @@ namespace VisionzFramework.Runtime.WeChat
         /// </summary>
         private AddressFamily m_AddressFamily;
         
-        /// <summary>
-        /// 绑定端口成功回调。
-        /// </summary>
-        public event UdpClientBindSuccessDelegate BindSuccessCallback;
-
-        /// <summary>
-        /// 发送数据成功回调。
-        /// </summary>
-        public event UdpClientSendSuccessDelegate SendSuccessCallback;
-
-        /// <summary>
-        /// 收到数据成功回调。
-        /// </summary>
-        public event UdpClientReceiveSuccessDelegate ReceiveSuccessCallback;
-
-        /// <summary>
-        /// 发生错误回调。
-        /// </summary>
-        public event UdpClientErrorDelegate UdpClientErrorCallback;
-        
-        private bool m_NeedRemoteInfo = false;
+        private int m_BindPort = 0;
         private bool m_BindedPort = false;
+        private bool m_NeedRemoteInfo = false;
         private bool m_HasOnMessage = false;
-        private bool m_Disposed = false;
         
         public UdpClientSocket() : this(AddressFamily.IPv4) { }
-
-        public UdpClientSocket(AddressFamily addressFamily) : this(addressFamily, null, null, null, null) { }
-
-        public UdpClientSocket(AddressFamily addressFamily, UdpClientBindSuccessDelegate bindCallback, UdpClientSendSuccessDelegate clientSendSuccess, UdpClientReceiveSuccessDelegate clientReceiveCallBack, UdpClientErrorDelegate errorCallback)
+        
+        public UdpClientSocket(AddressFamily addressFamily,
+            UdpClientBindSuccessDelegate bindSuccessCallback = null, UdpClientBindFailureDelegate bindFailureCallback = null,
+            UdpClientSendSuccessDelegate sendSuccessCallback = null, UdpClientFailureDelegate sendFailureCallback = null,
+            UdpClientReceiveSuccessDelegate receiveSuccessCallback = null, UdpClientFailureDelegate receiveFailureCallback = null)
+            : base(bindSuccessCallback, bindFailureCallback, sendSuccessCallback, sendFailureCallback, receiveSuccessCallback, receiveFailureCallback)
         {
             m_AddressFamily = addressFamily;
             
-            BindSuccessCallback = bindCallback;
-            SendSuccessCallback = clientSendSuccess;
-            ReceiveSuccessCallback = clientReceiveCallBack;
-            UdpClientErrorCallback = errorCallback;
-
             InitSocket();
         }
         
@@ -82,7 +59,7 @@ namespace VisionzFramework.Runtime.WeChat
         /// <summary>
         /// 广播开关。
         /// </summary>
-        public bool EnableBroadcast
+        public override bool EnableBroadcast
         {
             get;
             set;
@@ -91,7 +68,7 @@ namespace VisionzFramework.Runtime.WeChat
         /// <summary>
         /// 监听收到的数据包是否需要RemoteInfo
         /// </summary>
-        public bool NeedRemoteInfo
+        public override bool NeedRemoteInfo
         {
             get
             {
@@ -108,18 +85,18 @@ namespace VisionzFramework.Runtime.WeChat
         /// 绑定端口。
         /// </summary>
         /// <param name="port">端口号。</param>
-        public void Bind(int port)
+        public override void Bind(int port)
         {
+            m_BindPort = port;
             try
             {
                 m_Socket.Bind(port);
             }
             catch (Exception exception)
             {
-                if (UdpClientErrorCallback != null)
+                if (m_BindFailureCallback != null)
                 {
-                    SocketException socketException = exception as SocketException;
-                    UdpClientErrorCallback(this, NetworkErrorCode.BindError, socketException != null ? socketException.SocketErrorCode : SocketError.SocketError, exception.ToString());
+                    m_BindFailureCallback(this, port, SocketError.SocketError, exception.ToString());
                 }
 
                 throw;
@@ -127,9 +104,9 @@ namespace VisionzFramework.Runtime.WeChat
 
             m_BindedPort = true;
 
-            if (BindSuccessCallback != null)
+            if (m_BindSuccessCallback != null)
             {
-                BindSuccessCallback(port);
+                m_BindSuccessCallback(this, port);
             }
             
             //启动接收
@@ -142,7 +119,7 @@ namespace VisionzFramework.Runtime.WeChat
         /// <param name="buffer"></param>
         /// <param name="offset"></param>
         /// <param name="size"></param>
-        public void SendTo(byte[] buffer, int offset, int size, IPEndPoint remoteEP)
+        public override void SendTo(byte[] buffer, int offset, int size, IPEndPoint remoteEP)
         {
             m_UdpSocketSendOption.address = remoteEP.Address.ToString();
             m_UdpSocketSendOption.port = remoteEP.Port;
@@ -157,18 +134,16 @@ namespace VisionzFramework.Runtime.WeChat
             }
             catch (Exception exception)
             {
-                if (UdpClientErrorCallback != null)
+                if (m_SendFailureCallback != null)
                 {
-                    SocketException socketException = exception as SocketException;
-                    UdpClientErrorCallback(this, NetworkErrorCode.SendError, socketException != null ? socketException.SocketErrorCode : SocketError.Success, exception.ToString());
+                    m_SendFailureCallback(this, SocketError.SocketError, exception.ToString());
                 }
-
                 throw;
             }
             
-            if (SendSuccessCallback != null)
+            if (m_SendSuccessCallback != null)
             {
-                SendSuccessCallback(size);
+                m_SendSuccessCallback(this, size);
             }
         }
 
@@ -192,7 +167,10 @@ namespace VisionzFramework.Runtime.WeChat
         {
             if (result == null)
             {
-                FrameworkLog.Error("OnReceiveMessage Error : result is null");
+                if (m_ReceiveFailureCallback != null)
+                {
+                    m_ReceiveFailureCallback(this,  SocketError.SocketError, "OnReceiveMessage Error : result is null");
+                }
                 return;
             }
 
@@ -200,7 +178,10 @@ namespace VisionzFramework.Runtime.WeChat
 
             if (result.message == null || result.message.Length <= 0)
             {
-                FrameworkLog.Error("OnReceiveMessage Error : message is null");
+                if (m_ReceiveFailureCallback != null)
+                {
+                    m_ReceiveFailureCallback(this,  SocketError.SocketError, "OnReceiveMessage Error : message is null");
+                }
                 return;
             }
 
@@ -211,26 +192,29 @@ namespace VisionzFramework.Runtime.WeChat
                 remoteEP.Address = IPAddress.Parse(result.remoteInfo.address);
                 remoteEP.Port = result.remoteInfo.port;
             }
-            
+
             //外部处理数据
-            if (ReceiveSuccessCallback != null)
+            if (m_ReceiveSuccessCallback != null)
             {
-                ReceiveSuccessCallback(result.message, 0, result.message.Length, remoteEP);
+                m_ReceiveSuccessCallback(this, result.message, 0, result.message.Length, remoteEP);
             }
         }
 
         private void OnErrorCallback(GeneralCallbackResult result)
         {
-            if (UdpClientErrorCallback != null)
-            {
-                UdpClientErrorCallback(this, NetworkErrorCode.Unknown, SocketError.SocketError, result.errMsg);
-            }
+            FrameworkLog.Error(result.errMsg);
+
+            throw new FrameworkException("result.errMsg");
+            
+            //m_BindFailureCallback
+            //m_SendFailureCallback
+            //m_ReceiveFailureCallback
         }
 
         /// <summary>
         /// 关闭。
         /// </summary>
-        public void Close()
+        public override void Close()
         {
             if (m_Socket != null)
             {
@@ -243,17 +227,24 @@ namespace VisionzFramework.Runtime.WeChat
         /// <summary>
         /// 释放资源。
         /// </summary>
-        public void Dispose()
+        public override void Dispose()
         {
-            Dispose(true);
-            GC.SuppressFinalize(this);
+            try
+            {
+                Dispose(true);
+            }
+            finally
+            {
+                base.Dispose();    
+            }
         }
-        
+
+        private bool m_Disposed = false;
         /// <summary>
         /// 释放资源。
         /// </summary>
         /// <param name="disposing">释放资源标记。</param>
-        private void Dispose(bool disposing)
+        protected override void Dispose(bool disposing)
         {
             if (m_Disposed)
             {
@@ -262,8 +253,13 @@ namespace VisionzFramework.Runtime.WeChat
 
             if (disposing)
             {
-                Close();
+                //释放托管资源
             }
+            //释放非托管资源
+            m_UdpSocketSendOption = null;
+            
+            //释放父类
+            base.Dispose(disposing);
 
             m_Disposed = true;
         }

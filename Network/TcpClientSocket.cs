@@ -253,10 +253,10 @@ namespace VisionzFramework.Runtime.WeChat
 
             if (disposing)
             {
-                m_TcpSocketConnectOption = null;
                 //释放托管资源
             }
             //释放非托管资源
+            m_TcpSocketConnectOption = null;
             m_ConnectIp = null;
             
             //释放父类
